@@ -14,3 +14,7 @@ start simDHT
 notice:
 -------
 1. when max_node_qsize=10000, out bandwidth=1.5M/s
+
+live demo
+---------
+1. [MagnetMaster](http://cilidashi.com)
