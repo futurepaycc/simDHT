@@ -7,9 +7,10 @@ dependencies:
 1. [bencode](https://pypi.python.org/pypi/bencode/1.0)
 
 
-start simDHT
---------------------
-1. `python simDHT.py`
+##start simDHT
+```bash
+python simDHT.py
+```
 
 notice:
 -------
