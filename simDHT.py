@@ -4,7 +4,7 @@ from hashlib import sha1
 from random import randint
 from struct import unpack, pack
 from socket import inet_aton, inet_ntoa
-from threading import Timer, Thread, RLock
+from threading import Timer, Thread
 from time import sleep
 
 from bencode import bencode, bdecode
@@ -25,7 +25,7 @@ def entropy(bytes):
 
 def random_id():
     hash = sha1()
-    hash.update( entropy(20) )
+    hash.update(entropy(20))
     return hash.digest()
 
 def decode_nodes(nodes):
@@ -33,11 +33,13 @@ def decode_nodes(nodes):
     length = len(nodes)
     if (length % 26) != 0: 
         return n
+
     for i in range(0, length, 26):
         nid = nodes[i:i+20]
         ip = inet_ntoa(nodes[i+20:i+24])
         port = unpack("!H", nodes[i+24:i+26])[0]
-        n.append( (nid, ip, port) )
+        n.append((nid, ip, port))
+
     return n
 
 def timer(t, f):
@@ -48,7 +50,6 @@ class KRPC(Thread):
     def __init__(self):
         Thread.__init__(self)
         self.setDaemon(True)
-        self.join_successed = False
         self.types = {
             "r": self.response_received,
             "q": self.query_received
@@ -63,13 +64,12 @@ class KRPC(Thread):
 
     def response_received(self, msg, address):
         try:
-            self.join_successed = True
             nodes = decode_nodes(msg["r"]["nodes"])
             for node in nodes:
                 (nid, ip, port) = node
                 if len(nid) != 20: continue
                 if ip == self.ip: continue
-                self.table.put( KNode(nid, ip, port) )
+                self.table.put(KNode(nid, ip, port))
         except KeyError:
             pass
 
@@ -88,10 +88,10 @@ class KRPC(Thread):
     def get_neighbor(self, target):
         return target[:10]+random_id()[10:]
 
+
 class Client(KRPC):
     def __init__(self, table):
         self.table = table
-        self.lock = RLock()
 
         timer(KRPC_TIMEOUT, self.timeout)
         KRPC.__init__(self)
@@ -112,7 +112,7 @@ class Client(KRPC):
             self.find_node(address)
 
     def timeout(self):
-        if not self.join_successed:
+        if not self.table.nodes:
             self.joinDHT()
         timer(KRPC_TIMEOUT, self.timeout)
 
@@ -126,24 +126,18 @@ class Client(KRPC):
             except Exception:
                 pass
 
-    def roam(self):
+    def wander(self):
         while True:
-            if not self.table.nodes:
-                self.join_successed = False
-                sleep(1)
-                continue
-
-            for node in self.table.nodes:
-                self.find_node(( node.ip, node.port ), node.nid)
-
-            self.lock.acquire()
+            for node in self.table.nodes[:self.max_node_qsize]:
+                self.find_node((node.ip, node.port), node.nid)
             self.table.nodes = []
-            self.lock.release()
+            sleep(1)
+
 
 class Server(Client):
     def __init__(self, master, ip, port, max_node_qsize):
         self.max_node_qsize = max_node_qsize
-        self.table = KTable(max_node_qsize)
+        self.table = KTable()
         self.master = master
         self.ip = ip
         self.port = port
@@ -156,15 +150,15 @@ class Server(Client):
         except Exception, e:
             pass
 
+
 class KTable():
-    def __init__(self, max_node_qsize):
-        self.max_node_qsize = max_node_qsize
+    def __init__(self):
         self.nid = random_id()
         self.nodes = []
 
     def put(self, node):
-        if len(self.nodes) > self.max_node_qsize: return
-        self.nodes.append( node )
+        self.nodes.append(node)
+
 
 class KNode(object):
     def __init__(self, nid, ip=None, port=None):
@@ -172,13 +166,15 @@ class KNode(object):
         self.ip = ip
         self.port = port
 
+
 #using example
 class Master(object):
     def log(self, infohash):
         print infohash.encode("hex")
 
+
 if __name__ == "__main__":
-    #when max_node_qsize = 10000, out bandwidth=1.5M/s
-    s = Server(Master(), "0.0.0.0", 6881, max_node_qsize=10000)
+    #max_node_qsize bigger, bandwith bigger.
+    s = Server(Master(), "0.0.0.0", 6881, max_node_qsize=200)
     s.start()
-    s.roam()
+    s.wander()
