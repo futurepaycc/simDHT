@@ -128,7 +128,7 @@ class Client(KRPC):
 
     def wander(self):
         while True:
-            for node in self.table.nodes[:self.max_node_qsize]:
+            for node in list(set(self.table.nodes))[:self.max_node_qsize]:
                 self.find_node((node.ip, node.port), node.nid)
             self.table.nodes = []
             sleep(1)
@@ -166,6 +166,12 @@ class KNode(object):
         self.ip = ip
         self.port = port
 
+    def __eq__(self, node):
+        return node.nid == self.nid
+
+    def __hash__(self):
+        return hash(self.nid)
+
 
 #using example
 class Master(object):
@@ -175,6 +181,6 @@ class Master(object):
 
 if __name__ == "__main__":
     #max_node_qsize bigger, bandwith bigger.
-    s = Server(Master(), "0.0.0.0", 6881, max_node_qsize=200)
+    s = Server(Master(), "0.0.0.0", 3881, max_node_qsize=200)
     s.start()
     s.wander()
