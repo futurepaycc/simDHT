@@ -10,7 +10,7 @@ python simDHT.py
 ```
 
 ##notice:
-1. when max_node_qsize=10000, out bandwidth=1.5M/s
+You can edit `max_node_qsize` value for speed.
 
 ##live demo
 1. [MagnetMaster](http://cilidashi.com)
