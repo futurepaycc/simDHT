@@ -107,17 +107,17 @@ class Client(KRPC):
         }
         self.send_krpc(msg, address)
 
-    def joinDHT(self):
+    def join_DHT(self):
         for address in BOOTSTRAP_NODES: 
             self.find_node(address)
 
     def timeout(self):
         if not self.table.nodes:
-            self.joinDHT()
+            self.join_DHT()
         timer(KRPC_TIMEOUT, self.timeout)
 
     def run(self):
-        self.joinDHT()
+        self.join_DHT()
         while True:
             try:
                 (data, address) = self.ufd.recvfrom(65536)
