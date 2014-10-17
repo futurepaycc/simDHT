@@ -13,4 +13,5 @@ python simDHT.py
 You can edit `max_node_qsize` value for speed.
 
 ##live demo
-1. [MagnetMaster](http://cilidashi.com)
+1. [btbook](http://btbook.net)(Similar, this is my net friend's)
+2. [MagnetMaster](http://cilidashi.com)(Closed, mine)
