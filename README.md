@@ -12,6 +12,9 @@ python simDHT.py
 ##notice:
 You can edit `max_node_qsize` value for speed.
 
+##simDHT for NodeJS
+[nodeDHT](https://github.com/laomayi/nodeDHT)
+
 ##live demo
 1. [btbook](http://btbook.net)(Similar, my net friend's)
 2. [MagnetMaster](http://cilidashi.com)(Closed, mine)
