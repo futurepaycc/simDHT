@@ -15,13 +15,13 @@ BOOTSTRAP_NODES = [
     ("router.utorrent.com", 6881)
 ] 
 TID_LENGTH = 4
-KRPC_TIMEOUT = 10
+RE_JOIN_DHT_INTERVAL = 10
 
-def entropy(bytes):
-    s = ""
-    for i in range(bytes):
-        s += chr(randint(0, 255))
-    return s
+def entropy(length):
+    chars = []
+    for i in range(length):
+        chars.append(chr(randint(0, 255)))
+    return "".join(chars)
 
 def random_id():
     hash = sha1()
@@ -45,38 +45,54 @@ def decode_nodes(nodes):
 def timer(t, f):
     Timer(t, f).start()
 
+def get_neighbor(target, end=10):
+    return target[:end]+random_id()[end:]
 
-class KRPC(Thread):
-    def __init__(self):
+
+class DHT(Thread):
+    def __init__(self, master, bind_ip, bind_port, max_node_qsize):
         Thread.__init__(self)
         self.setDaemon(True)
-        self.types = {
-            "r": self.response_received,
-            "q": self.query_received
-        }
-        self.actions = {
-            "get_peers": self.get_peers_received,
-        }
+
+        self.master = master
+        self.bind_ip = bind_ip
+        self.bind_port = bind_port
+        self.max_node_qsize = max_node_qsize
+        self.table = KTable()
 
         self.ufd = socket.socket(socket.AF_INET, 
             socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        self.ufd.bind((self.ip, self.port))
+        self.ufd.bind((self.bind_ip, self.bind_port))
 
-    def response_received(self, msg, address):
-        try:
-            nodes = decode_nodes(msg["r"]["nodes"])
-            for node in nodes:
-                (nid, ip, port) = node
-                if len(nid) != 20: continue
-                if ip == self.ip: continue
-                self.table.put(KNode(nid, ip, port))
-        except KeyError:
-            pass
+        timer(RE_JOIN_DHT_INTERVAL, self.join_DHT)
 
-    def query_received(self, msg, address):
+    def start(self):
+        Thread.start(self)
+        return self
+
+    def run(self):
+        self.join_DHT()
+        while True:
+            try:
+                (data, address) = self.ufd.recvfrom(65536)
+                msg = bdecode(data)
+                self.on_message(msg, address)
+            except Exception:
+                pass
+
+    def on_message(self, msg, address):
         try:
-            self.actions[msg["q"]](msg, address)
-        except KeyError:
+            if msg["y"] == "r":
+                if msg["r"].has_key("nodes"):
+                    self.process_find_node_response(msg, address)
+
+            elif msg["y"] == "q":
+                if msg["q"] == "find_node":
+                    self.process_find_node_request(msg, address)
+
+                elif msg["q"] == "get_peers":
+                    self.process_get_peers_request(msg, address)
+        except KeyError, e:
             pass
 
     def send_krpc(self, msg, address):
@@ -85,71 +101,61 @@ class KRPC(Thread):
         except:
             pass
 
-    def get_neighbor(self, target):
-        return target[:10]+random_id()[10:]
-
-
-class Client(KRPC):
-    def __init__(self, table):
-        self.table = table
-
-        timer(KRPC_TIMEOUT, self.timeout)
-        KRPC.__init__(self)
-
-    def find_node(self, address, nid=None):
-        nid = self.get_neighbor(nid) if nid else self.table.nid
+    def send_find_node(self, address, nid=None):
+        nid = get_neighbor(nid) if nid else self.table.nid
         tid = entropy(TID_LENGTH)
-        msg = {
-            "t": tid,
-            "y": "q",
-            "q": "find_node",
-            "a": {"id": nid, "target": random_id()}
-        }
+        msg = dict(
+            t = tid,
+            y = "q",
+            q = "find_node",
+            a = dict(id = nid, target = random_id())
+        )
         self.send_krpc(msg, address)
 
     def join_DHT(self):
         for address in BOOTSTRAP_NODES: 
-            self.find_node(address)
-
-    def timeout(self):
-        if not self.table.nodes:
-            self.join_DHT()
-        timer(KRPC_TIMEOUT, self.timeout)
-
-    def run(self):
-        self.join_DHT()
-        while True:
-            try:
-                (data, address) = self.ufd.recvfrom(65536)
-                msg = bdecode(data)
-                self.types[msg["y"]](msg, address)
-            except Exception:
-                pass
+            self.send_find_node(address)
 
     def wander(self):
         while True:
             for node in list(set(self.table.nodes))[:self.max_node_qsize]:
-                self.find_node((node.ip, node.port), node.nid)
+                self.send_find_node((node.ip, node.port), node.nid)
             self.table.nodes = []
             sleep(1)
 
+    def play_dead(self, address):
+        msg = dict(
+            t = entropy(TID_LENGTH),
+            y = "e",
+            e = [202, "Server Error"]
+        )
+        self.send_krpc(msg, address)
 
-class Server(Client):
-    def __init__(self, master, ip, port, max_node_qsize):
-        self.max_node_qsize = max_node_qsize
-        self.table = KTable()
-        self.master = master
-        self.ip = ip
-        self.port = port
-        Client.__init__(self, self.table)
+    def process_find_node_response(self, msg, address):
+        nodes = decode_nodes(msg["r"]["nodes"])
+        for node in nodes:
+            (nid, ip, port) = node
+            if len(nid) != 20: continue
+            if ip == self.bind_ip: continue
+            self.table.put(KNode(nid, ip, port))
 
-    def get_peers_received(self, msg, address):
+    def process_get_peers_request(self, msg, address):
         try:
             infohash = msg["a"]["info_hash"]
-            self.master.log(infohash)
-        except Exception, e:
+            self.master.log(infohash, address)
+        except KeyError, e:
             pass
+        finally:
+            self.play_dead(address)
 
+    def process_find_node_request(self, msg, address):
+        try:
+            target = msg["a"]["target"]
+            self.master.log(target, address)
+        except KeyError, e:
+            pass
+        finally:
+            self.play_dead(address)
 
 class KTable():
     def __init__(self):
@@ -175,12 +181,10 @@ class KNode(object):
 
 #using example
 class Master(object):
-    def log(self, infohash):
-        print infohash.encode("hex")
+    def log(self, infohash, address=None):
+        print "%s from %s:%s" % (infohash.encode("hex"), address[0], address[1])
 
 
 if __name__ == "__main__":
-    #max_node_qsize bigger, bandwith bigger.
-    s = Server(Master(), "0.0.0.0", 3881, max_node_qsize=200)
-    s.start()
-    s.wander()
+    #max_node_qsize bigger, bandwith bigger, spped higher
+    DHT(Master(), "0.0.0.0", 6681, max_node_qsize=1000).start().wander()
