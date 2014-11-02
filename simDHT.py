@@ -123,9 +123,9 @@ class DHT(Thread):
             self.table.nodes = []
             sleep(1)
 
-    def play_dead(self, address):
+    def play_dead(self, tid, address):
         msg = dict(
-            t = entropy(TID_LENGTH),
+            t = tid,
             y = "e",
             e = [202, "Server Error"]
         )
@@ -141,21 +141,21 @@ class DHT(Thread):
 
     def process_get_peers_request(self, msg, address):
         try:
+            tid = msg["t"]
             infohash = msg["a"]["info_hash"]
             self.master.log(infohash, address)
+            self.play_dead(tid, address)
         except KeyError, e:
             pass
-        finally:
-            self.play_dead(address)
 
     def process_find_node_request(self, msg, address):
         try:
+            tid = msg["t"]
             target = msg["a"]["target"]
             self.master.log(target, address)
+            self.play_dead(tid, address)
         except KeyError, e:
             pass
-        finally:
-            self.play_dead(address)
 
 class KTable():
     def __init__(self):
