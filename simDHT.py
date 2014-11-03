@@ -15,7 +15,7 @@ BOOTSTRAP_NODES = [
     ("router.utorrent.com", 6881)
 ] 
 TID_LENGTH = 4
-RE_JOIN_DHT_INTERVAL = 10
+RE_JOIN_DHT_INTERVAL = 30
 
 def entropy(length):
     chars = []
@@ -64,11 +64,7 @@ class DHT(Thread):
             socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.ufd.bind((self.bind_ip, self.bind_port))
 
-        timer(RE_JOIN_DHT_INTERVAL, self.join_DHT)
-
-    def start(self):
-        Thread.start(self)
-        return self
+        timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT)
 
     def run(self):
         self.join_DHT()
@@ -115,6 +111,10 @@ class DHT(Thread):
     def join_DHT(self):
         for address in BOOTSTRAP_NODES: 
             self.send_find_node(address)
+
+    def re_join_DHT(self):
+        self.join_DHT()
+        timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT) 
 
     def wander(self):
         while True:
@@ -187,4 +187,6 @@ class Master(object):
 
 if __name__ == "__main__":
     #max_node_qsize bigger, bandwith bigger, spped higher
-    DHT(Master(), "0.0.0.0", 6681, max_node_qsize=1000).start().wander()
+    dht = DHT(Master(), "0.0.0.0", 6881, max_node_qsize=20)
+    dht.start()
+    dht.wander()
