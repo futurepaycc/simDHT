@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # encoding: utf-8
 import socket
 from hashlib import sha1
