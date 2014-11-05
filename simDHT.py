@@ -2,8 +2,8 @@
 import socket
 from hashlib import sha1
 from random import randint
-from struct import unpack, pack
-from socket import inet_aton, inet_ntoa
+from struct import unpack
+from socket import inet_ntoa
 from threading import Timer, Thread
 from time import sleep
 
@@ -85,13 +85,13 @@ class DHT(Thread):
 
                 elif msg["q"] == "get_peers":
                     self.process_get_peers_request(msg, address)
-        except KeyError, e:
+        except KeyError:
             pass
 
     def send_krpc(self, msg, address):
         try:
             self.ufd.sendto(bencode(msg), address)
-        except:
+        except Exception:
             pass
 
     def send_find_node(self, address, nid=None):
@@ -142,7 +142,7 @@ class DHT(Thread):
             infohash = msg["a"]["info_hash"]
             self.master.log(infohash, address)
             self.play_dead(tid, address)
-        except KeyError, e:
+        except KeyError:
             pass
 
     def process_find_node_request(self, msg, address):
@@ -151,7 +151,7 @@ class DHT(Thread):
             target = msg["a"]["target"]
             self.master.log(target, address)
             self.play_dead(tid, address)
-        except KeyError, e:
+        except KeyError:
             pass
 
 class KTable():
