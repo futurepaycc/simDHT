@@ -1,4 +1,4 @@
-#encoding: utf-8
+# encoding: utf-8
 import socket
 from hashlib import sha1
 from random import randint
@@ -17,13 +17,16 @@ BOOTSTRAP_NODES = [
 TID_LENGTH = 4
 RE_JOIN_DHT_INTERVAL = 30
 
+
 def entropy(length):
     return ''.join(chr(randint(0, 255)) for _ in xrange(length))
+
 
 def random_id():
     hash = sha1()
     hash.update(entropy(20))
     return hash.digest()
+
 
 def decode_nodes(nodes):
     n = []
@@ -32,21 +35,24 @@ def decode_nodes(nodes):
         return n
 
     for i in range(0, length, 26):
-        nid = nodes[i:i+20]
-        ip = inet_ntoa(nodes[i+20:i+24])
-        port = unpack("!H", nodes[i+24:i+26])[0]
+        nid = nodes[i:i + 20]
+        ip = inet_ntoa(nodes[i + 20:i + 24])
+        port = unpack("!H", nodes[i + 24:i + 26])[0]
         n.append((nid, ip, port))
 
     return n
 
+
 def timer(t, f):
     Timer(t, f).start()
 
+
 def get_neighbor(target, end=10):
-    return target[:end]+random_id()[end:]
+    return target[:end] + random_id()[end:]
 
 
 class DHT(Thread):
+
     def __init__(self, master, bind_ip, bind_port, max_node_qsize):
         Thread.__init__(self)
         self.setDaemon(True)
@@ -57,8 +63,9 @@ class DHT(Thread):
         self.max_node_qsize = max_node_qsize
         self.table = KTable()
 
-        self.ufd = socket.socket(socket.AF_INET,
-            socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.ufd = socket.socket(
+            socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP
+        )
         self.ufd.bind((self.bind_ip, self.bind_port))
 
         timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT)
@@ -76,7 +83,7 @@ class DHT(Thread):
     def on_message(self, msg, address):
         try:
             if msg["y"] == "r":
-                if msg["r"].has_key("nodes"):
+                if "nodes" in msg["r"]:
                     self.process_find_node_response(msg, address)
 
             elif msg["y"] == "q":
@@ -98,10 +105,10 @@ class DHT(Thread):
         nid = get_neighbor(nid) if nid else self.table.nid
         tid = entropy(TID_LENGTH)
         msg = dict(
-            t = tid,
-            y = "q",
-            q = "find_node",
-            a = dict(id = nid, target = random_id())
+            t=tid,
+            y="q",
+            q="find_node",
+            a=dict(id=nid, target=random_id())
         )
         self.send_krpc(msg, address)
 
@@ -122,9 +129,9 @@ class DHT(Thread):
 
     def play_dead(self, tid, address):
         msg = dict(
-            t = tid,
-            y = "e",
-            e = [202, "Server Error"]
+            t=tid,
+            y="e",
+            e=[202, "Server Error"]
         )
         self.send_krpc(msg, address)
 
@@ -132,8 +139,10 @@ class DHT(Thread):
         nodes = decode_nodes(msg["r"]["nodes"])
         for node in nodes:
             (nid, ip, port) = node
-            if len(nid) != 20: continue
-            if ip == self.bind_ip: continue
+            if len(nid) != 20:
+                continue
+            if ip == self.bind_ip:
+                continue
             self.table.put(KNode(nid, ip, port))
 
     def process_get_peers_request(self, msg, address):
@@ -154,7 +163,9 @@ class DHT(Thread):
         except KeyError:
             pass
 
+
 class KTable():
+
     def __init__(self):
         self.nid = random_id()
         self.nodes = []
@@ -164,6 +175,7 @@ class KTable():
 
 
 class KNode(object):
+
     def __init__(self, nid, ip=None, port=None):
         self.nid = nid
         self.ip = ip
@@ -176,14 +188,17 @@ class KNode(object):
         return hash(self.nid)
 
 
-#using example
+# using example
 class Master(object):
+
     def log(self, infohash, address=None):
-        print "%s from %s:%s" % (infohash.encode("hex"), address[0], address[1])
+        print "%s from %s:%s" % (
+            infohash.encode("hex"), address[0], address[1]
+        )
 
 
 if __name__ == "__main__":
-    #max_node_qsize bigger, bandwith bigger, spped higher
+    # max_node_qsize bigger, bandwith bigger, spped higher
     dht = DHT(Master(), "0.0.0.0", 6881, max_node_qsize=20)
     dht.start()
     dht.wander()
