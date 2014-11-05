@@ -13,7 +13,7 @@ BOOTSTRAP_NODES = [
     ("router.bittorrent.com", 6881),
     ("dht.transmissionbt.com", 6881),
     ("router.utorrent.com", 6881)
-] 
+]
 TID_LENGTH = 4
 RE_JOIN_DHT_INTERVAL = 30
 
@@ -28,7 +28,7 @@ def random_id():
 def decode_nodes(nodes):
     n = []
     length = len(nodes)
-    if (length % 26) != 0: 
+    if (length % 26) != 0:
         return n
 
     for i in range(0, length, 26):
@@ -57,7 +57,7 @@ class DHT(Thread):
         self.max_node_qsize = max_node_qsize
         self.table = KTable()
 
-        self.ufd = socket.socket(socket.AF_INET, 
+        self.ufd = socket.socket(socket.AF_INET,
             socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.ufd.bind((self.bind_ip, self.bind_port))
 
@@ -106,12 +106,12 @@ class DHT(Thread):
         self.send_krpc(msg, address)
 
     def join_DHT(self):
-        for address in BOOTSTRAP_NODES: 
+        for address in BOOTSTRAP_NODES:
             self.send_find_node(address)
 
     def re_join_DHT(self):
         self.join_DHT()
-        timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT) 
+        timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT)
 
     def wander(self):
         while True:
