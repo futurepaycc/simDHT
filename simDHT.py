@@ -18,10 +18,7 @@ TID_LENGTH = 4
 RE_JOIN_DHT_INTERVAL = 30
 
 def entropy(length):
-    chars = []
-    for i in range(length):
-        chars.append(chr(randint(0, 255)))
-    return "".join(chars)
+    return ''.join(chr(randint(0, 255)) for _ in xrange(length))
 
 def random_id():
     hash = sha1()
