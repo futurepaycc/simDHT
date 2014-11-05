@@ -118,7 +118,8 @@ class DHT(Thread):
             self.send_find_node(address)
 
     def re_join_DHT(self):
-        self.join_DHT()
+        if not self.table.nodes:
+            self.join_DHT()
         timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT)
 
     def wander(self):
