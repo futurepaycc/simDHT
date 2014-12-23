@@ -1,22 +1,26 @@
-#!/usr/bin/env python
 # encoding: utf-8
+
 import socket
 from hashlib import sha1
 from random import randint
-from struct import unpack
-from socket import inet_ntoa
+from struct import unpack, pack
+from socket import inet_aton, inet_ntoa
 from threading import Timer, Thread
 from time import sleep
 
-from bencode import bencode, bdecode
+from bencode import bencode, bdecode, BTFailure
 
 BOOTSTRAP_NODES = [
     ("router.bittorrent.com", 6881),
     ("dht.transmissionbt.com", 6881),
     ("router.utorrent.com", 6881)
 ]
-TID_LENGTH = 4
-RE_JOIN_DHT_INTERVAL = 30
+TID_LENGTH = 2
+RE_JOIN_DHT_INTERVAL = 10
+TOKEN_LENGTH = 2
+
+def intify(hstr):
+    return long(hstr.encode("hex"), 16)
 
 
 def entropy(length):
@@ -24,9 +28,9 @@ def entropy(length):
 
 
 def random_id():
-    hash = sha1()
-    hash.update(entropy(20))
-    return hash.digest()
+    h = sha1()
+    h.update(entropy(20))
+    return h.digest()
 
 
 def decode_nodes(nodes):
@@ -36,9 +40,9 @@ def decode_nodes(nodes):
         return n
 
     for i in range(0, length, 26):
-        nid = nodes[i:i + 20]
-        ip = inet_ntoa(nodes[i + 20:i + 24])
-        port = unpack("!H", nodes[i + 24:i + 26])[0]
+        nid = nodes[i:i+20]
+        ip = inet_ntoa(nodes[i+20:i+24])
+        port = unpack("!H", nodes[i+24:i+26])[0]
         n.append((nid, ip, port))
 
     return n
@@ -48,31 +52,100 @@ def timer(t, f):
     Timer(t, f).start()
 
 
-def get_neighbor(target, end=10):
-    return target[:end] + random_id()[end:]
+def get_neighbor(target, nid, end=10):
+    return target[:end]+nid[end:]
 
 
-class DHT(Thread):
+class KNode(object):
 
-    def __init__(self, master, bind_ip, bind_port, max_node_qsize):
+    __slots__ = ("nid", "ip", "port")
+
+    def __init__(self, nid, ip, port):
+        self.nid = nid
+        self.ip = ip
+        self.port = port
+
+    def __eq__(self, node):
+        return self.nid == node.nid
+
+    def __hash__(self):
+        return hash(self.nid)
+
+
+class DHTClient(Thread):
+
+    def __init__(self, max_node_qsize):
         Thread.__init__(self)
         self.setDaemon(True)
+        self.max_node_qsize = max_node_qsize
+        self.nid = random_id()
+        self.nodes = []
+
+    def send_krpc(self, msg, address):
+        try:
+            self.ufd.sendto(bencode(msg), address)
+        except Exception:
+            pass
+
+    def send_find_node(self, address, nid=None):
+        nid = get_neighbor(nid, self.nid) if nid else self.nid
+        tid = entropy(TID_LENGTH)
+        msg = {
+            "t": tid,
+            "y": "q",
+            "q": "find_node",
+            "a": {"id": nid, "target": random_id()}
+        }
+        self.send_krpc(msg, address)
+
+    def join_DHT(self):
+        for address in BOOTSTRAP_NODES:
+            self.send_find_node(address)
+
+    def re_join_DHT(self):
+        self.join_DHT()
+        timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT)
+
+    def auto_send_find_node(self):
+       while True:
+            nodes = list(set(self.nodes))
+            for node in nodes[:self.max_node_qsize]:
+                self.send_find_node((node.ip, node.port), node.nid)
+            self.nodes = []
+            sleep(1)
+
+    def process_find_node_response(self, msg, address):
+        nodes = decode_nodes(msg["r"]["nodes"])
+        for node in nodes:
+            (nid, ip, port) = node
+            if len(nid) != 20: continue
+            if ip == self.bind_ip: continue
+            n = KNode(nid, ip, port)
+            self.nodes.append(n)
+
+
+class DHTServer(DHTClient):
+
+    def __init__(self, master, bind_ip, bind_port, max_node_qsize):
+        DHTClient.__init__(self, max_node_qsize)
 
         self.master = master
         self.bind_ip = bind_ip
         self.bind_port = bind_port
-        self.max_node_qsize = max_node_qsize
-        self.table = KTable()
 
-        self.ufd = socket.socket(
-            socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP
-        )
+        self.process_request_actions = {
+            "get_peers": self.on_get_peers_request,
+            "announce_peer": self.on_announce_peer_request,
+        }
+
+        self.ufd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.ufd.bind((self.bind_ip, self.bind_port))
 
         timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT)
 
+
     def run(self):
-        self.join_DHT()
+        self.re_join_DHT()
         while True:
             try:
                 (data, address) = self.ufd.recvfrom(65536)
@@ -84,110 +157,79 @@ class DHT(Thread):
     def on_message(self, msg, address):
         try:
             if msg["y"] == "r":
-                if "nodes" in msg["r"]:
+                if msg["r"].has_key("nodes"):
                     self.process_find_node_response(msg, address)
-
             elif msg["y"] == "q":
-                if msg["q"] == "find_node":
-                    self.process_find_node_request(msg, address)
-
-                elif msg["q"] == "get_peers":
-                    self.process_get_peers_request(msg, address)
+                try:
+                    self.process_request_actions[msg["q"]](msg, address)
+                except KeyError:
+                    self.play_dead(msg, address)
         except KeyError:
             pass
 
-    def send_krpc(self, msg, address):
+    def on_get_peers_request(self, msg, address):
         try:
-            self.ufd.sendto(bencode(msg), address)
+            infohash = msg["a"]["info_hash"]
+            tid = msg["t"]
+            nid = msg["a"]["id"]
+            token = infohash[:TOKEN_LENGTH]
+            msg = {
+                "t": tid,
+                "y": "r",
+                "r": {
+                    "id": get_neighbor(infohash, self.nid),
+                    "nodes": "",
+                    "token": token
+                }
+            }
+            self.send_krpc(msg, address)
+        except KeyError:
+            pass
+
+    def on_announce_peer_request(self, msg, address):
+        try:
+            infohash = msg["a"]["info_hash"]
+            token = msg["a"]["token"]
+            nid = msg["a"]["id"]
+            tid = msg["t"]
+
+            if infohash[:TOKEN_LENGTH] == token:
+                if msg["a"].has_key("implied_port ") and msg["a"]["implied_port "] != 0:
+                    port = address[1]
+                else:
+                    port = msg["a"]["port"]
+                self.master.log(infohash, (address[0], port))
         except Exception:
             pass
+        finally:
+            self.ok(msg, address)
 
-    def send_find_node(self, address, nid=None):
-        nid = get_neighbor(nid) if nid else self.table.nid
-        tid = entropy(TID_LENGTH)
-        msg = dict(
-            t=tid,
-            y="q",
-            q="find_node",
-            a=dict(id=nid, target=random_id())
-        )
-        self.send_krpc(msg, address)
-
-    def join_DHT(self):
-        for address in BOOTSTRAP_NODES:
-            self.send_find_node(address)
-
-    def re_join_DHT(self):
-        if not self.table.nodes:
-            self.join_DHT()
-        timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT)
-
-    def wander(self):
-        while True:
-            for node in list(set(self.table.nodes))[:self.max_node_qsize]:
-                self.send_find_node((node.ip, node.port), node.nid)
-            self.table.nodes = []
-            sleep(1)
-
-    def play_dead(self, tid, address):
-        msg = dict(
-            t=tid,
-            y="e",
-            e=[202, "Server Error"]
-        )
-        self.send_krpc(msg, address)
-
-    def process_find_node_response(self, msg, address):
-        nodes = decode_nodes(msg["r"]["nodes"])
-        for node in nodes:
-            (nid, ip, port) = node
-            if len(nid) != 20:
-                continue
-            if ip == self.bind_ip:
-                continue
-            self.table.put(KNode(nid, ip, port))
-
-    def process_get_peers_request(self, msg, address):
+    def play_dead(self, msg, address):
         try:
             tid = msg["t"]
-            infohash = msg["a"]["info_hash"]
-            self.master.log(infohash, address)
-            self.play_dead(tid, address)
+            msg = {
+                "t": tid,
+                "y": "e",
+                "e": [202, "Server Error"]
+            }
+            self.send_krpc(msg, address)
         except KeyError:
             pass
 
-    def process_find_node_request(self, msg, address):
+    def ok(self, msg, address):
         try:
             tid = msg["t"]
-            target = msg["a"]["target"]
-            self.master.log(target, address)
-            self.play_dead(tid, address)
+            nid = msg["a"]["id"]
+            msg = {
+                "t": tid,
+                "y": "r",
+                "r": {
+                    "id": get_neighbor(nid, self.nid)
+                }
+            }
+            self.send_krpc(msg, address)
         except KeyError:
             pass
-
-
-class KTable():
-
-    def __init__(self):
-        self.nid = random_id()
-        self.nodes = []
-
-    def put(self, node):
-        self.nodes.append(node)
-
-
-class KNode(object):
-
-    def __init__(self, nid, ip=None, port=None):
-        self.nid = nid
-        self.ip = ip
-        self.port = port
-
-    def __eq__(self, node):
-        return node.nid == self.nid
-
-    def __hash__(self):
-        return hash(self.nid)
 
 
 # using example
@@ -201,6 +243,6 @@ class Master(object):
 
 if __name__ == "__main__":
     # max_node_qsize bigger, bandwith bigger, spped higher
-    dht = DHT(Master(), "0.0.0.0", 6881, max_node_qsize=20)
+    dht = DHTServer(Master(), "0.0.0.0", 6882, max_node_qsize=200)
     dht.start()
-    dht.wander()
+    dht.auto_send_find_node()
