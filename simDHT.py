@@ -1,14 +1,15 @@
+#!/usr/bin/env python
 # encoding: utf-8
 
 import socket
 from hashlib import sha1
 from random import randint
-from struct import unpack, pack
-from socket import inet_aton, inet_ntoa
+from struct import unpack
+from socket import inet_ntoa
 from threading import Timer, Thread
 from time import sleep
 
-from bencode import bencode, bdecode, BTFailure
+from bencode import bencode, bdecode
 
 BOOTSTRAP_NODES = [
     ("router.bittorrent.com", 6881),
@@ -58,18 +59,10 @@ def get_neighbor(target, nid, end=10):
 
 class KNode(object):
 
-    __slots__ = ("nid", "ip", "port")
-
     def __init__(self, nid, ip, port):
         self.nid = nid
         self.ip = ip
         self.port = port
-
-    def __eq__(self, node):
-        return self.nid == node.nid
-
-    def __hash__(self):
-        return hash(self.nid)
 
 
 class DHTClient(Thread):
@@ -232,7 +225,6 @@ class DHTServer(DHTClient):
             pass
 
 
-# using example
 class Master(object):
 
     def log(self, infohash, address=None):
@@ -241,6 +233,7 @@ class Master(object):
         )
 
 
+# using example
 if __name__ == "__main__":
     # max_node_qsize bigger, bandwith bigger, spped higher
     dht = DHTServer(Master(), "0.0.0.0", 6882, max_node_qsize=200)
