@@ -25,7 +25,7 @@ def intify(hstr):
 
 
 def entropy(length):
-    return ''.join(chr(randint(0, 255)) for _ in xrange(length))
+    return "".join(chr(randint(0, 255)) for _ in xrange(length))
 
 
 def random_id():
@@ -87,7 +87,10 @@ class DHTClient(Thread):
             "t": tid,
             "y": "q",
             "q": "find_node",
-            "a": {"id": nid, "target": random_id()}
+            "a": {
+                "id": nid,
+                "target": random_id()
+            }
         }
         self.send_krpc(msg, address)
 
