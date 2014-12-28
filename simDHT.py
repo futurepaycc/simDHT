@@ -11,11 +11,11 @@ from time import sleep
 
 from bencode import bencode, bdecode
 
-BOOTSTRAP_NODES = [
+BOOTSTRAP_NODES = (
     ("router.bittorrent.com", 6881),
     ("dht.transmissionbt.com", 6881),
     ("router.utorrent.com", 6881)
-]
+)
 TID_LENGTH = 2
 RE_JOIN_DHT_INTERVAL = 10
 TOKEN_LENGTH = 2
