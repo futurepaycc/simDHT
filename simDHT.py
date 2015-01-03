@@ -64,6 +64,9 @@ class KNode(object):
         self.ip = ip
         self.port = port
 
+    def __hash__(self):
+        return hash(self.nid)
+
 
 class DHTClient(Thread):
 
