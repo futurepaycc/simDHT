@@ -8,6 +8,7 @@ from struct import unpack
 from socket import inet_ntoa
 from threading import Timer, Thread
 from time import sleep
+from collections import deque
 
 from bencode import bencode, bdecode
 
@@ -17,11 +18,8 @@ BOOTSTRAP_NODES = (
     ("router.utorrent.com", 6881)
 )
 TID_LENGTH = 2
-RE_JOIN_DHT_INTERVAL = 10
+RE_JOIN_DHT_INTERVAL = 3
 TOKEN_LENGTH = 2
-
-def intify(hstr):
-    return long(hstr.encode("hex"), 16)
 
 
 def entropy(length):
@@ -64,9 +62,6 @@ class KNode(object):
         self.ip = ip
         self.port = port
 
-    def __hash__(self):
-        return hash(self.nid)
-
 
 class DHTClient(Thread):
 
@@ -75,7 +70,7 @@ class DHTClient(Thread):
         self.setDaemon(True)
         self.max_node_qsize = max_node_qsize
         self.nid = random_id()
-        self.nodes = []
+        self.nodes = deque(maxlen=max_node_qsize)
 
     def send_krpc(self, msg, address):
         try:
@@ -102,16 +97,19 @@ class DHTClient(Thread):
             self.send_find_node(address)
 
     def re_join_DHT(self):
-        self.join_DHT()
+        if len(self.nodes) == 0:
+            self.join_DHT()
         timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT)
 
     def auto_send_find_node(self):
-       while True:
-            nodes = list(set(self.nodes))
-            for node in nodes[:self.max_node_qsize]:
+        wait = 1.0 / self.max_node_qsize
+        while True:
+            try:
+                node = self.nodes.popleft()
                 self.send_find_node((node.ip, node.port), node.nid)
-            self.nodes = []
-            sleep(1)
+            except IndexError:
+                pass
+            sleep(wait)
 
     def process_find_node_response(self, msg, address):
         nodes = decode_nodes(msg["r"]["nodes"])
