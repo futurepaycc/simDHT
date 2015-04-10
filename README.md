@@ -1,9 +1,6 @@
 ## simDHT
 A DHT crawler, is not quite based on Kademlia, written by Python, the code is very very simple.
 
-## Example
-[btspider](http://demo.btspider.cc)(Sale the core binary program of BTspider, no the frontend and backend.)
-
 ## Start simDHT
 ```bash
 python simDHT.py
