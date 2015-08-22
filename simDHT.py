@@ -191,7 +191,7 @@ class DHTServer(DHTClient):
             tid = msg["t"]
 
             if infohash[:TOKEN_LENGTH] == token:
-                if msg["a"].has_key("implied_port ") and msg["a"]["implied_port "] != 0:
+                if msg["a"].has_key("implied_port") and msg["a"]["implied_port"] != 0:
                     port = address[1]
                 else:
                     port = msg["a"]["port"]
