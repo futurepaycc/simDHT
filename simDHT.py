@@ -117,7 +117,7 @@ class DHTClient(Thread):
             (nid, ip, port) = node
             if len(nid) != 20: continue
             if ip == self.bind_ip: continue
-            if port < 1 || port > 65535: continue
+            if port < 1 or port > 65535: continue
             n = KNode(nid, ip, port)
             self.nodes.append(n)
 
@@ -196,7 +196,7 @@ class DHTServer(DHTClient):
                     port = address[1]
                 else:
                     port = msg["a"]["port"]
-                    if port < 1 || port > 65535: return
+                    if port < 1 or port > 65535: return
                 self.master.log(infohash, (address[0], port))
         except Exception:
             pass
