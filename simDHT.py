@@ -241,7 +241,7 @@ class Master(object):
 
 # using example
 if __name__ == "__main__":
-    # max_node_qsize bigger, bandwith bigger, spped higher
+    # max_node_qsize bigger, bandwith bigger, speed higher
     dht = DHTServer(Master(), "0.0.0.0", 6882, max_node_qsize=200)
     dht.start()
     dht.auto_send_find_node()
