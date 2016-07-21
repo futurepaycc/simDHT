@@ -13,8 +13,8 @@ python simDHT.py
 You can edit `max_node_qsize` value for speed.
 
 ## simDHT for NodeJS and Ruby
-[nodeDHT](https://github.com/laomayi/nodeDHT)
-[rbdht, better than the simDHT](https://github.com/old-woman/rbdht)
+[nodeDHT](https://github.com/dontcontactme/nodeDHT)
+[rbdht, better than the simDHT](https://github.com/dontcontactme/rbdht)
 
 ## p2pspider
-You may be interested in [p2pspider(DHT Spider + BT Client = P2P Spider)](https://github.com/Fuck-You-GFW/p2pspider).
+You may be interested in [p2pspider(DHT Spider + BT Client = P2P Spider)](https://github.com/dontcontactme/p2pspider).
