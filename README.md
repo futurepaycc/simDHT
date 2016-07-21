@@ -1,5 +1,5 @@
 ## simDHT
-A DHT crawler, was written in Python, the code is very very simple.
+A DHT crawler, written in Python, the code is very very simple.
 
 ## Start simDHT
 ```bash
