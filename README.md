@@ -12,7 +12,7 @@ python simDHT.py
 ## Notice
 You can edit `max_node_qsize` value for speed.
 
-## simDHT for NodeJS and Ruby
+## simDHT for Node.js and Ruby
 [nodeDHT](https://github.com/dontcontactme/nodeDHT)
 [rbdht, better than the simDHT](https://github.com/dontcontactme/rbdht)
 
