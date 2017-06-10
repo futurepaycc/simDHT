@@ -1,5 +1,12 @@
 #!/usr/bin/env python
 # encoding: utf-8
+'''
+vs code 折叠技巧:
+c+k c+0 全局折叠(数字0)
+c+k c+j 全局展开
+
+c+k c+[/] 局部(涵子块折叠,展开)
+'''
 
 import socket
 from hashlib import sha1
@@ -50,12 +57,17 @@ def decode_nodes(nodes):
 def timer(t, f):
     Timer(t, f).start()
 
+#######################################工具方法去结束,业务方法区开始#####################################
 
+#get_neighbor target: 目标node id, nid,自身node id
+#返回邻居节点的简化实现
 def get_neighbor(target, nid, end=10):
-    return target[:end]+nid[end:]
+    return target[:end]+nid[end:] #目标的前10字节+自己的后十字节
 
 
-class KNode(object):
+#######################################业务方法结束,业务对象区开始########################################3
+
+class KNode(object):   #节点对象
 
     def __init__(self, nid, ip, port):
         self.nid = nid
@@ -63,7 +75,7 @@ class KNode(object):
         self.port = port
 
 
-class DHTClient(Thread):
+class DHTClient(Thread): #继承自线程
 
     def __init__(self, max_node_qsize):
         Thread.__init__(self)
@@ -72,14 +84,18 @@ class DHTClient(Thread):
         self.nid = random_id()
         self.nodes = deque(maxlen=max_node_qsize)
 
-    def send_krpc(self, msg, address):
+    def send_krpc(self, msg, address): #rpc消息规范: http://www.bittorrent.org/beps/bep_0005.html
         try:
             self.ufd.sendto(bencode(msg), address)
         except Exception:
             pass
-
-    def send_find_node(self, address, nid=None):
-        nid = get_neighbor(nid, self.nid) if nid else self.nid
+    
+    '''
+    用法1: 启动加入dht网络(相当于查找自己??)
+    用法2: 查找某一节点nid
+    ''' 
+    def send_find_node(self, address, nid=None): #发出查找节点的请求(节点由作为server监听而来)
+        nid = get_neighbor(nid, self.nid) if nid else self.nid #查找邻居节点(一个三元赋值表达式)
         tid = entropy(TID_LENGTH)
         msg = {
             "t": tid,
@@ -94,23 +110,24 @@ class DHTClient(Thread):
 
     def join_DHT(self):
         for address in BOOTSTRAP_NODES:
-            self.send_find_node(address)
+            self.send_find_node(address) #加入时,不传nid
 
     def re_join_DHT(self):
         if len(self.nodes) == 0:
             self.join_DHT()
-        timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT)
+        timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT) #每隔一段时间,检查节点列表,如果为空,重新加入dht网络
 
-    def auto_send_find_node(self):
-        wait = 1.0 / self.max_node_qsize
+    def auto_send_find_node(self):  #2,作为客户端时的入口(消费者主循环)
+        wait = 1.0 / self.max_node_qsize #max_node_qsize 又实例化是传入200,这里的意思是一秒内启动完
         while True:
             try:
-                node = self.nodes.popleft()
+                node = self.nodes.popleft() #如果为空链表,会抛出异常(但被下面忽略了),直到有值为止(作为服务器是监听得到的节点信息)
                 self.send_find_node((node.ip, node.port), node.nid)
             except IndexError:
                 pass
             sleep(wait)
 
+    # 处理find_peer 请求的响应,就是讲查到的节点放入self.nodes中
     def process_find_node_response(self, msg, address):
         nodes = decode_nodes(msg["r"]["nodes"])
         for node in nodes:
@@ -122,9 +139,9 @@ class DHTClient(Thread):
             self.nodes.append(n)
 
 
-class DHTServer(DHTClient):
+class DHTServer(DHTClient): #继承语法,不是构造参数
 
-    def __init__(self, master, bind_ip, bind_port, max_node_qsize):
+    def __init__(self, master, bind_ip, bind_port, max_node_qsize): #构造函数
         DHTClient.__init__(self, max_node_qsize)
 
         self.master = master
@@ -142,11 +159,11 @@ class DHTServer(DHTClient):
         timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT)
 
 
-    def run(self):
+    def run(self):  #1,作为服务器端时,程序运行入口(是个线程)
         self.re_join_DHT()
-        while True:
+        while True: # 作为服务器时的主循环
             try:
-                (data, address) = self.ufd.recvfrom(65536)
+                (data, address) = self.ufd.recvfrom(65536) #从socket读取数据,参数是缓冲区大小
                 msg = bdecode(data)
                 self.on_message(msg, address)
             except Exception:
@@ -154,10 +171,10 @@ class DHTServer(DHTClient):
 
     def on_message(self, msg, address):
         try:
-            if msg["y"] == "r":
-                if msg["r"].has_key("nodes"):
+            if msg["y"] == "r": 
+                if msg["r"].has_key("nodes"): #find_node 查询的响应消息
                     self.process_find_node_response(msg, address)
-            elif msg["y"] == "q":
+            elif msg["y"] == "q": # 查询消息
                 try:
                     self.process_request_actions[msg["q"]](msg, address)
                 except KeyError:
@@ -165,7 +182,7 @@ class DHTServer(DHTClient):
         except KeyError:
             pass
 
-    def on_get_peers_request(self, msg, address):
+    def on_get_peers_request(self, msg, address): #响应对方节点的 查询资源 请求
         try:
             infohash = msg["a"]["info_hash"]
             tid = msg["t"]
@@ -184,7 +201,7 @@ class DHTServer(DHTClient):
         except KeyError:
             pass
 
-    def on_announce_peer_request(self, msg, address):
+    def on_announce_peer_request(self, msg, address): #响应关联节点的 发布资源 通知
         try:
             infohash = msg["a"]["info_hash"]
             token = msg["a"]["token"]
@@ -197,7 +214,7 @@ class DHTServer(DHTClient):
                 else:
                     port = msg["a"]["port"]
                     if port < 1 or port > 65535: return
-                self.master.log(infohash, (address[0], port))
+                self.master.log(infohash, (address[0], port)) #打印新发布资源信息
         except Exception:
             pass
         finally:
@@ -242,6 +259,6 @@ class Master(object):
 # using example
 if __name__ == "__main__":
     # max_node_qsize bigger, bandwith bigger, speed higher
-    dht = DHTServer(Master(), "0.0.0.0", 6882, max_node_qsize=200)
-    dht.start()
+    dht = DHTServer(Master(), "0.0.0.0", 6881, max_node_qsize=200)
+    dht.start() #启动server类run方法
     dht.auto_send_find_node()
