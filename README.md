@@ -1,3 +1,6 @@
+## 使用python2.7
+python3有点依赖问题
+
 ## simDHT
 A DHT crawler, written in Python, the code is very very simple.
 

@@ -251,10 +251,7 @@ class DHTServer(DHTClient): #继承语法,不是构造参数
 class Master(object):
 
     def log(self, infohash, address=None):
-        print "%s from %s:%s" % (
-            infohash.encode("hex"), address[0], address[1]
-        )
-
+        print("%s from %s:%s"%(infohash.encode("hex"), address[0], address[1]))
 
 # using example
 if __name__ == "__main__":
