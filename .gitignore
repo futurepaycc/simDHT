@@ -1,2 +1,3 @@
 .gitignore
 sftp-config.json
+*.pyc
