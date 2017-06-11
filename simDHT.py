@@ -159,7 +159,7 @@ class DHTServer(DHTClient): #继承语法,不是构造参数
         timer(RE_JOIN_DHT_INTERVAL, self.re_join_DHT)
 
 
-    def run(self):  #1,作为服务器端时,程序运行入口(是个线程)
+    def run(self):  #1,客户端和服务端的统一线程入口
         self.re_join_DHT()
         while True: # 作为服务器时的主循环
             try:
