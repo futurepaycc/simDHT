@@ -1,3 +1,4 @@
 .gitignore
 sftp-config.json
 *.pyc
+.vscode/
