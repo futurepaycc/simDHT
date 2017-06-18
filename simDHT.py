@@ -6,6 +6,9 @@ c+k c+0 全局折叠(数字0)
 c+k c+j 全局展开
 
 c+k c+[/] 局部(涵子块折叠,展开)
+
+选择python版本:
+F1,select python
 '''
 
 import socket
