@@ -113,7 +113,7 @@ class DHTClient(Thread): #继承自线程
 
     def join_DHT(self):
         for address in BOOTSTRAP_NODES:
-            self.send_find_node(address) #加入时,不传nid
+            self.send_find_node(address) #加入时,不传nid(会使用初始化时的random_id)
 
     def re_join_DHT(self):
         if len(self.nodes) == 0:
